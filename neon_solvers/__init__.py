@@ -1,6 +1,3 @@
-from neon_solvers.solver import AbstractSolver
-
-
 # NEON AI (TM) SOFTWARE, Software Development Kit & Application Development System
 # All trademark and other rights reserved by their respective owners
 # Copyright 2008-2021 Neongecko.com Inc.
@@ -20,7 +17,9 @@ from neon_solvers.solver import AbstractSolver
 # SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 # WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-from ovos_plugin_manager.text_transformers import find_utterance_transformer_plugins, load_utterance_transformer_plugin
+from neon_solvers.solver import AbstractSolver
+
+from ovos_plugin_manager.solvers import find_question_solver_plugins, load_question_solver_plugin
 from ovos_utils.log import LOG
 
 
@@ -34,7 +33,7 @@ class NeonSolversService:
         self.load_plugins()
 
     def load_plugins(self):
-        for plug_name, plug in find_utterance_transformer_plugins().items():
+        for plug_name, plug in find_question_solver_plugins().items():
             if plug_name in self.config:
                 try:
                     self.loaded_modules[plug_name] = plug()
@@ -44,13 +43,21 @@ class NeonSolversService:
 
     @property
     def modules(self):
-        return self.loaded_modules.values()
+        return sorted(self.loaded_modules.values(),
+                      key=lambda k: k.priority, reverse=True)
 
     def shutdown(self):
-        pass
+        for module in self.modules:
+            try:
+                module.shutdown()
+            except:
+                pass
 
     def spoken_answers(self, utterance, context=None):
         for module in self.modules:
-            ans = module.spoken_answers(utterance, context)
-            if ans:
-                return ans
+            try:
+                ans = module.spoken_answers(utterance, context)
+                if ans:
+                    return ans
+            except:
+                pass

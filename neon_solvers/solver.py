@@ -117,3 +117,6 @@ class AbstractSolver:
             else:
                 return self.sentence_split(summary)
 
+    def shutdown(self):
+        """ module specific shutdown method """
+        pass
