@@ -117,6 +117,15 @@ class AbstractSolver:
             else:
                 return self.sentence_split(summary)
 
+    # images api
+    def get_image(self, query, context=None):
+        data = self.get_data(query, context)
+        image = data.get("Image") or \
+                "https://github.com/JarbasSkills/skill-ddg/raw/master/ui/logo.png"
+        if image.startswith("/"):
+            image = "https://duckduckgo.com" + image
+        return image
+
     def shutdown(self):
         """ module specific shutdown method """
         pass
