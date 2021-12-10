@@ -48,11 +48,15 @@ class AbstractSolver:
     def sentence_split(text, max_sentences=25):
         return sentence_tokenize(text)[:max_sentences]
 
-    def _tx_query(self, query, context=None, lang=None):
+    def _get_user_lang(self, context, lang=None):
         context = context or {}
         lang = lang or context.get("lang") or self.default_lang
         lang = lang.split("-")[0]
-        user_lang = lang
+        return lang
+
+    def _tx_query(self, query, context=None, lang=None):
+        context = context or {}
+        lang = user_lang = self._get_user_lang(context, lang)
 
         # translate input to English
         if user_lang not in self.supported_langs:
@@ -69,7 +73,7 @@ class AbstractSolver:
         query assured to be in self.default_lang
         return a single sentence text response
         """
-        raise NotImplementedError
+        return ""
 
     def get_data(self, query, context):
         """
@@ -83,12 +87,7 @@ class AbstractSolver:
         query assured to be in self.default_lang
         return path/url to a single image to acompany spoken_answer
         """
-        data = self.get_data(query, context)
-        image = data.get("Image") or \
-                "https://github.com/JarbasSkills/skill-ddg/raw/master/ui/logo.png"
-        if image.startswith("/"):
-            image = "https://duckduckgo.com" + image
-        return image
+        return None
 
     def get_expanded_answer(self, query, context=None):
         """
@@ -114,6 +113,7 @@ class AbstractSolver:
         cache and auto translate query if needed
         returns translated response from self.get_data
         """
+        user_lang = self._get_user_lang(context, lang)
         query, context, lang = self._tx_query(query, context, lang)
         # read from cache
         if query in self.cache:
@@ -147,6 +147,7 @@ class AbstractSolver:
         cache and auto translate query if needed
         returns chunked and translated response from self.get_spoken_answer
         """
+        user_lang = self._get_user_lang(context, lang)
         query, context, lang = self._tx_query(query, context, lang)
 
         # get answer
@@ -178,15 +179,17 @@ class AbstractSolver:
         }
         :return:
         """
+        user_lang = self._get_user_lang(context, lang)
         query, context, lang = self._tx_query(query, context, lang)
         summary = self.get_spoken_answer(query, context)
         img = self.get_image(query, context)
         steps =  self.get_expanded_answer(query, context)
-        if not steps and summary:
-            for utt in self.sentence_split(summary):
-                yield {"summary": utt, "img": img, "title":query}
-        elif summary:
-            yield {"summary": summary, "img": img, "title":query}
-        for step in steps:
-            yield step
+        if summary:
+            steps = [{"summary": utt, "img": img, "title":query}
+                      for utt in self.sentence_split(summary)] + steps
+
+        # translate english output to user lang
+        if user_lang not in self.supported_langs:
+            return self.translator.translate_list(steps, user_lang, lang)
+        return steps
 
