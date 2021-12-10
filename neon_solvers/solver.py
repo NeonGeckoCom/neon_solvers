@@ -116,6 +116,7 @@ class AbstractSolver:
                         for utt in self.sentence_split(summary)]
             else:
                 return self.sentence_split(summary)
+        return []
 
     # images api
     def get_image(self, query, context=None):
