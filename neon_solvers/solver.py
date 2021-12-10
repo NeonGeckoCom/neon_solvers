@@ -48,30 +48,79 @@ class AbstractSolver:
     def sentence_split(text, max_sentences=25):
         return sentence_tokenize(text)[:max_sentences]
 
-    def get_spoken_answer(self, query, context):
-        raise NotImplementedError
-
-    def get_data(self, query, context):
-        return {"short_answer": self.get_spoken_answer(query, context)}
-
-    # search api
-    def search(self, query, context=None, lang=None):
+    def _tx_query(self, query, context=None, lang=None):
         context = context or {}
         lang = lang or context.get("lang") or self.default_lang
         lang = lang.split("-")[0]
         user_lang = lang
+
         # translate input to English
         if user_lang not in self.supported_langs:
             lang = self.default_lang
             query = self.translator.translate(query, lang, user_lang)
 
+        # get visual answer
+        context["lang"] = lang
+        return query, context, lang
+
+    # plugin methods to override
+    def get_spoken_answer(self, query, context):
+        """
+        query assured to be in self.default_lang
+        return a single sentence text response
+        """
+        raise NotImplementedError
+
+    def get_data(self, query, context):
+        """
+        query assured to be in self.default_lang
+        return a dict response
+        """
+        return {"short_answer": self.get_spoken_answer(query, context)}
+
+    def get_image(self, query, context=None):
+        """
+        query assured to be in self.default_lang
+        return path/url to a single image to acompany spoken_answer
+        """
+        data = self.get_data(query, context)
+        image = data.get("Image") or \
+                "https://github.com/JarbasSkills/skill-ddg/raw/master/ui/logo.png"
+        if image.startswith("/"):
+            image = "https://duckduckgo.com" + image
+        return image
+
+    def get_expanded_answer(self, query, context=None):
+        """
+        query assured to be in self.default_lang
+        return a list of ordered steps to expand the answer, eg, "tell me more"
+
+        {
+            "title": "optional",
+            "summary": "speak this",
+            "img": "optional/path/or/url
+        }
+        :return:
+        """
+        return []
+
+    def shutdown(self):
+        """ module specific shutdown method """
+        pass
+
+    # user facing methods
+    def search(self, query, context=None, lang=None):
+        """
+        cache and auto translate query if needed
+        returns translated response from self.get_data
+        """
+        query, context, lang = self._tx_query(query, context, lang)
         # read from cache
         if query in self.cache:
             data = self.cache[query]
         else:
             # search data
             try:
-                context["lang"] = lang
                 data = self.get_data(query, context)
             except:
                 return {}
@@ -85,20 +134,22 @@ class AbstractSolver:
             return self.translator.translate_dict(data, user_lang, lang)
         return data
 
-    # spoken answers api
-    def spoken_answers(self, query, context=None, lang=None):
-        context = context or {}
-        lang = lang or context.get("lang") or self.default_lang
-        lang = lang.split("-")[0]
-        user_lang = lang
+    def visual_answer(self, query, context=None, lang=None):
+        """
+        cache and auto translate query if needed
+        returns image that answers query
+        """
+        query, context, lang = self._tx_query(query, context, lang)
+        return self.get_image(query, context)
 
-        # translate input to English
-        if user_lang not in self.supported_langs:
-            lang = self.default_lang
-            query = self.translator.translate(query, lang, user_lang)
+    def spoken_answer(self, query, context=None, lang=None):
+        """
+        cache and auto translate query if needed
+        returns chunked and translated response from self.get_spoken_answer
+        """
+        query, context, lang = self._tx_query(query, context, lang)
 
         # get answer
-        context["lang"] = lang
         if query in self.spoken_cache:
             # read from cache
             summary = self.spoken_cache[query]
@@ -112,21 +163,30 @@ class AbstractSolver:
         if summary:
             # translate english output to user lang
             if user_lang not in self.supported_langs:
-                return [self.translator.translate(utt, user_lang, lang)
-                        for utt in self.sentence_split(summary)]
+                return self.translator.translate(summary, user_lang, lang)
             else:
-                return self.sentence_split(summary)
-        return []
+                return summary
 
-    # images api
-    def get_image(self, query, context=None):
-        data = self.get_data(query, context)
-        image = data.get("Image") or \
-                "https://github.com/JarbasSkills/skill-ddg/raw/master/ui/logo.png"
-        if image.startswith("/"):
-            image = "https://duckduckgo.com" + image
-        return image
+    def long_answer(self, query, context=None, lang=None):
+        """
+        return a list of ordered steps to expand the answer, eg, "tell me more"
+        step0 is always self.spoken_answer and self.get_image
+        {
+            "title": "optional",
+            "summary": "speak this",
+            "img": "optional/path/or/url
+        }
+        :return:
+        """
+        query, context, lang = self._tx_query(query, context, lang)
+        summary = self.get_spoken_answer(query, context)
+        img = self.get_image(query, context)
+        steps =  self.get_expanded_answer(query, context)
+        if not steps and summary:
+            for utt in self.sentence_split(summary):
+                yield {"summary": utt, "img": img, "title":query}
+        elif summary:
+            yield {"summary": summary, "img": img, "title":query}
+        for step in steps:
+            yield step
 
-    def shutdown(self):
-        """ module specific shutdown method """
-        pass
