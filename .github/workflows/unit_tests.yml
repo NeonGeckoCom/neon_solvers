@@ -29,4 +29,4 @@ jobs:
           pip install pytest pytest-timeout pytest-cov
       - name: Run unittests
         run: |
-          pytest test/unittests
+          pytest tests/unittests
