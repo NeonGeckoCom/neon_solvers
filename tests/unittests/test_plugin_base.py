@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock
 
 from neon_solvers import AbstractSolver
 
@@ -10,10 +11,6 @@ class MySolver(AbstractSolver):
         config = {"lang": "en"}
         super(MySolver, self).__init__(name="MySolver", priority=100,
                                        config=config)
-        self.get_data_called = False
-        self.get_image_called = False
-        self.get_spoken_called = False
-        self.get_expanded_called = False
 
     # expected solver methods to be implemented
     def get_data(self, query, context):
@@ -21,7 +18,6 @@ class MySolver(AbstractSolver):
         query assured to be in self.default_lang
         return a dict response
         """
-        self.get_data_called = True
         return {"error": "404 answer not found"}
 
     def get_image(self, query, context=None):
@@ -29,7 +25,6 @@ class MySolver(AbstractSolver):
         query assured to be in self.default_lang
         return path/url to a single image to acompany spoken_answer
         """
-        self.get_image_called = True
         return "http://stock.image.jpg"
 
     def get_spoken_answer(self, query, context=None):
@@ -37,7 +32,6 @@ class MySolver(AbstractSolver):
         query assured to be in self.default_lang
         return a single sentence text response
         """
-        self.get_spoken_called = True
         return "The full answer is XXX"
 
     def get_expanded_answer(self, query, context=None):
@@ -52,7 +46,6 @@ class MySolver(AbstractSolver):
         }
         :return:
         """
-        self.get_expanded_called = True
         steps = [
             {"title": "the question", "summary": "we forgot the question", "image": "404.jpg"},
             {"title": "the answer", "summary": "but the answer is 42", "image": "42.jpg"}
@@ -67,52 +60,89 @@ class TestSolverBaseMethods(unittest.TestCase):
 
     def test_get_spoken(self):
         solver = MySolver()
-        self.assertFalse(solver.get_data_called)
-        self.assertFalse(solver.get_image_called)
-        self.assertFalse(solver.get_spoken_called)
-        self.assertFalse(solver.get_expanded_called)
+        solver.get_spoken_answer = Mock()
+        solver.get_spoken_answer.return_value = "42"
 
+        solver.spoken_cache.clear()
         ans = solver.spoken_answer("some query")
-        self.assertTrue(solver.get_spoken_called)
-        self.assertFalse(solver.get_data_called)
-        self.assertFalse(solver.get_image_called)
-        self.assertFalse(solver.get_expanded_called)
+        solver.get_spoken_answer.assert_called()
 
     def test_get_expanded(self):
         solver = MySolver()
-        self.assertFalse(solver.get_data_called)
-        self.assertFalse(solver.get_image_called)
-        self.assertFalse(solver.get_spoken_called)
-        self.assertFalse(solver.get_expanded_called)
+        solver.cache.clear()
+        solver.get_expanded_answer = Mock()
+        solver.get_expanded_answer.return_value = []
 
         ans = solver.long_answer("some query")
-        self.assertFalse(solver.get_spoken_called)
-        self.assertFalse(solver.get_data_called)
-        self.assertFalse(solver.get_image_called)
-        self.assertTrue(solver.get_expanded_called)
+        solver.get_expanded_answer.assert_called()
 
     def test_get_image(self):
         solver = MySolver()
-        self.assertFalse(solver.get_data_called)
-        self.assertFalse(solver.get_image_called)
-        self.assertFalse(solver.get_spoken_called)
-        self.assertFalse(solver.get_expanded_called)
+        solver.cache.clear()
+        solver.get_image = Mock()
+        solver.get_image.return_value = "42.jpeg"
 
         ans = solver.visual_answer("some query")
-        self.assertFalse(solver.get_spoken_called)
-        self.assertFalse(solver.get_data_called)
-        self.assertTrue(solver.get_image_called)
-        self.assertFalse(solver.get_expanded_called)
+        solver.get_image.assert_called()
 
     def test_get_data(self):
         solver = MySolver()
-        self.assertFalse(solver.get_data_called)
-        self.assertFalse(solver.get_image_called)
-        self.assertFalse(solver.get_spoken_called)
-        self.assertFalse(solver.get_expanded_called)
+        solver.cache.clear()
+        solver.get_data = Mock()
+        solver.get_data.return_value = {}
 
         ans = solver.search("some query")
-        self.assertFalse(solver.get_spoken_called)
-        self.assertTrue(solver.get_data_called)
-        self.assertFalse(solver.get_image_called)
-        self.assertFalse(solver.get_expanded_called)
+        solver.get_data.assert_called()
+
+    def test_get_spoken_cache(self):
+        solver = MySolver()
+        solver.spoken_cache.clear()
+        solver.get_spoken_answer = Mock()
+        solver.get_spoken_answer.return_value = "42"
+
+        ans = solver.spoken_answer("some query")
+        solver.get_spoken_answer.assert_called()
+
+        # now test that the cache is loaded and method not called again
+        solver.get_spoken_answer = Mock()
+        solver.get_spoken_answer.return_value = "42"
+        ans = solver.spoken_answer("some query")
+        solver.get_spoken_answer.assert_not_called()
+
+        # clear cache, method is called again
+        solver.spoken_cache.clear()
+        ans = solver.spoken_answer("some query")
+        solver.get_spoken_answer.assert_called()
+
+    def test_get_data_cache(self):
+        solver = MySolver()
+        solver.cache.clear()
+        solver.get_data = Mock()
+        solver.get_data.return_value = {"dummy": "42"}
+
+        ans = solver.search("some query")
+        solver.get_data.assert_called()
+
+        # now test that the cache is loaded and method not called again
+        solver.get_data = Mock()
+        solver.get_data.return_value = {"dummy": "42"}
+        ans = solver.search("some query")
+        solver.get_data.assert_not_called()
+
+        # clear cache, method is called again
+        solver.cache.clear()
+        ans = solver.search("some query")
+        solver.get_data.assert_called()
+
+    def test_translation(self):
+        solver = MySolver()
+        solver.translator.translate = Mock()
+        solver.translator.translate.return_value = "a wild translation appears"
+
+        # no translation
+        ans = solver.spoken_answer("some query")
+        solver.translator.translate.assert_not_called()
+
+        # translation
+        ans = solver.spoken_answer("not english", context={"lang": "unk"})
+        solver.translator.translate.assert_called()
