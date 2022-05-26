@@ -27,7 +27,6 @@ class NeonSolversService:
     def __init__(self, bus, config=None):
         self.config_core = config or {}
         self.loaded_modules = {}
-        self.has_loaded = False
         self.bus = bus
         self.config = self.config_core.get("solvers") or {}
         self.load_plugins()
