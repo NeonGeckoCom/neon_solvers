@@ -182,12 +182,15 @@ class AbstractSolver:
         """
         user_lang = self._get_user_lang(context, lang)
         query, context, lang = self._tx_query(query, context, lang)
-        summary = self.get_spoken_answer(query, context)
-        img = self.get_image(query, context)
         steps = self.get_expanded_answer(query, context)
-        if summary:
-            steps = [{"summary": utt, "img": img, "title": query}
-                     for utt in self.sentence_split(summary)] + steps
+
+        # use spoken_answer as last resort
+        if not steps:
+            summary = self.get_spoken_answer(query, context)
+            if summary:
+                img = self.get_image(query, context)
+                steps = [{"title": query, "summary": step0, "img": img}
+                         for step0 in self.sentence_split(summary, -1)]
 
         # translate english output to user lang
         if user_lang not in self.supported_langs:
