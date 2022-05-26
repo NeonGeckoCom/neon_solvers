@@ -91,7 +91,7 @@ Plugins work with any language as long as you stick to the officially supported 
     def long_answer(self, query, context=None, lang=None):
         """
         return a list of ordered steps to expand the answer, eg, "tell me more"
-        step0 is always self.spoken_answer and self.get_image
+        translated response from self.get_expanded_answer
         {
             "title": "optional",
             "summary": "speak this",
@@ -102,9 +102,9 @@ Plugins work with any language as long as you stick to the officially supported 
 ```
 
 
-# Example Usage
+# Example Usage  - DuckDuckGo plugin
 
-DuckDuckGo example
+single answer
 
 ```python
 from neon_solver_ddg_plugin import DDGSolver
@@ -117,9 +117,18 @@ query = "who is Isaac Newton"
 ans = d.spoken_answer(query)
 print(ans)
 # Sir Isaac Newton was an English mathematician, physicist, astronomer, alchemist, theologian, and author widely recognised as one of the greatest mathematicians and physicists of all time and among the most influential scientists. He was a key figure in the philosophical revolution known as the Enlightenment. His book Philosophiæ Naturalis Principia Mathematica, first published in 1687, established classical mechanics. Newton also made seminal contributions to optics, and shares credit with German mathematician Gottfried Wilhelm Leibniz for developing infinitesimal calculus. In the Principia, Newton formulated the laws of motion and universal gravitation that formed the dominant scientific viewpoint until it was superseded by the theory of relativity.
+```
 
+chunked answer, for conversational dialogs, ie "tell me more"
 
-# chunked answer, "tell me more"
+```python
+from neon_solver_ddg_plugin import DDGSolver
+
+d = DDGSolver()
+
+query = "who is Isaac Newton"
+
+# chunked answer
 for sentence in d.long_answer(query):
     print(sentence["title"])
     print(sentence["summary"])
@@ -144,23 +153,14 @@ for sentence in d.long_answer(query):
     # who is Isaac Newton
     # In the Principia, Newton formulated the laws of motion and universal gravitation that formed the dominant scientific viewpoint until it was superseded by the theory of relativity.
     # https://duckduckgo.com/i/ea7be744.jpg
-    
-    # who is Isaac Newton
-    # Sir Isaac Newton was an English mathematician, physicist, astronomer, alchemist, theologian, and author widely recognised as one of the greatest mathematicians and physicists of all time and among the most influential scientists.
-    # https://duckduckgo.com/i/ea7be744.jpg
-    
-    # who is Isaac Newton
-    # He was a key figure in the philosophical revolution known as the Enlightenment.
-    # https://duckduckgo.com/i/ea7be744.jpg
-    
-    # who is Isaac Newton
-    # His book Philosophiæ Naturalis Principia Mathematica, first published in 1687, established classical mechanics.
-    # https://duckduckgo.com/i/ea7be744.jpg
-    
-    # who is Isaac Newton
-    # Newton also made seminal contributions to optics, and shares credit with German mathematician Gottfried Wilhelm Leibniz for developing infinitesimal calculus.
-    # https://duckduckgo.com/i/ea7be744.jpg
+  ```  
 
+Auto translation, pass user language in context
+
+```python
+from neon_solver_ddg_plugin import DDGSolver
+
+d = DDGSolver()
 
 # bidirectional auto translate by passing lang context
 sentence = d.spoken_answer("Quem é Isaac Newton",
