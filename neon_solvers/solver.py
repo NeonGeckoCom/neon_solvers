@@ -66,6 +66,12 @@ class AbstractSolver:
             query = self.translator.translate(query, lang, user_lang)
 
         context["lang"] = lang
+
+        # HACK - cleanup some common translation mess ups
+        # this is properly solving by using a good translate plugin
+        # only common mistakes in default libretranslate plugin are handled
+        query = query.replace("who is is ", "who is ")
+
         return query, context, lang
 
     # plugin methods to override
