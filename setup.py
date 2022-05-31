@@ -16,12 +16,21 @@ def required(requirements_file):
                 if pkg.strip() and not pkg.startswith("#")]
 
 
+with open("./version.py", "r", encoding="utf-8") as v:
+    for line in v.readlines():
+        if line.startswith("__version__"):
+            if '"' in line:
+                version = line.split('"')[1]
+            else:
+                version = line.split("'")[1]
+
+
 with open("README.md", "r") as f:
     long_description = f.read()
 
 setup(
     name='neon_solvers',
-    version='0.0.1',
+    version=version,
     packages=['neon_solvers'],
     url='https://github.com/NeonGeckoCom/neon_solvers',
     license='bsd3',
