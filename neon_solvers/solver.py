@@ -1,6 +1,9 @@
-# # NEON AI (TM) SOFTWARE, Software Development Kit & Application Development System
-# # All trademark and other rights reserved by their respective owners
-# # Copyright 2008-2021 Neongecko.com Inc.
+# NEON AI (TM) SOFTWARE, Software Development Kit & Application Framework
+# All trademark and other rights reserved by their respective owners
+# Copyright 2008-2022 Neongecko.com Inc.
+# Contributors: Daniel McKnight, Guy Daniels, Elon Gasper, Richard Leeds,
+# Regina Bloomstine, Casimiro Ferreira, Andrii Pernatii, Kirill Hrymailo
+# BSD-3 License
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 # 1. Redistributions of source code must retain the above copyright notice,
@@ -22,9 +25,10 @@
 # LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE,  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-import xdg.BaseDirectory
+
 from json_database import JsonStorageXDG
 from ovos_plugin_manager.language import OVOSLangTranslationFactory
+from ovos_utils.xdg_utils import xdg_cache_home
 from quebra_frases import sentence_tokenize
 
 
@@ -37,12 +41,14 @@ class AbstractSolver:
             self.supported_langs.insert(0, self.default_lang)
         self.priority = priority
         self.translator = OVOSLangTranslationFactory.create()
+        # cache contains raw data
         self.cache = JsonStorageXDG(name + "_data",
-                                    xdg_folder=xdg.BaseDirectory.xdg_cache_home,
+                                    xdg_folder=xdg_cache_home(),
                                     subfolder="neon_solvers")
+        # spoken cache contains dialogs
         self.spoken_cache = JsonStorageXDG(name,
-                                    xdg_folder=xdg.BaseDirectory.xdg_cache_home,
-                                    subfolder="neon_solvers")
+                                           xdg_folder=xdg_cache_home(),
+                                           subfolder="neon_solvers")
 
     @staticmethod
     def sentence_split(text, max_sentences=25):
@@ -58,13 +64,18 @@ class AbstractSolver:
         context = context or {}
         lang = user_lang = self._get_user_lang(context, lang)
 
-        # translate input to English
+        # translate input to default lang
         if user_lang not in self.supported_langs:
             lang = self.default_lang
             query = self.translator.translate(query, lang, user_lang)
 
-        # get visual answer
         context["lang"] = lang
+
+        # HACK - cleanup some common translation mess ups
+        # this is properly solving by using a good translate plugin
+        # only common mistakes in default libretranslate plugin are handled
+        query = query.replace("who is is ", "who is ")
+
         return query, context, lang
 
     # plugin methods to override
@@ -181,15 +192,17 @@ class AbstractSolver:
         """
         user_lang = self._get_user_lang(context, lang)
         query, context, lang = self._tx_query(query, context, lang)
-        summary = self.get_spoken_answer(query, context)
-        img = self.get_image(query, context)
-        steps =  self.get_expanded_answer(query, context)
-        if summary:
-            steps = [{"summary": utt, "img": img, "title":query}
-                      for utt in self.sentence_split(summary)] + steps
+        steps = self.get_expanded_answer(query, context)
+
+        # use spoken_answer as last resort
+        if not steps:
+            summary = self.get_spoken_answer(query, context)
+            if summary:
+                img = self.get_image(query, context)
+                steps = [{"title": query, "summary": step0, "img": img}
+                         for step0 in self.sentence_split(summary, -1)]
 
         # translate english output to user lang
         if user_lang not in self.supported_langs:
             return self.translator.translate_list(steps, user_lang, lang)
         return steps
-

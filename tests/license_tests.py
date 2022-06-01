@@ -26,46 +26,56 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE,  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from neon_solvers.solver import AbstractSolver
+import unittest
+from pprint import pprint
 
-from ovos_plugin_manager.solvers import find_question_solver_plugins, load_question_solver_plugin
-from ovos_utils.log import LOG
+from lichecker import LicenseChecker
+
+# these packages dont define license in setup.py
+# manually verified and injected
+license_overrides = {
+    "kthread": "MIT",
+    'yt-dlp': "Unlicense",
+    'pyxdg': 'GPL-2.0',
+    'ptyprocess': 'ISC license',
+    'psutil': 'BSD3'
+}
+# explicitly allow these packages that would fail otherwise
+whitelist = []
+
+# validation flags
+allow_nonfree = False
+allow_viral = False
+allow_unknown = False
+allow_unlicense = True
+allow_ambiguous = False
+
+pkg_name = "neon_solvers"
 
 
-class NeonSolversService:
-    def __init__(self, bus, config=None):
-        self.config_core = config or {}
-        self.loaded_modules = {}
-        self.bus = bus
-        self.config = self.config_core.get("solvers") or {}
-        self.load_plugins()
+class TestLicensing(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        licheck = LicenseChecker(pkg_name,
+                                 license_overrides=license_overrides,
+                                 whitelisted_packages=whitelist,
+                                 allow_ambiguous=allow_ambiguous,
+                                 allow_unlicense=allow_unlicense,
+                                 allow_unknown=allow_unknown,
+                                 allow_viral=allow_viral,
+                                 allow_nonfree=allow_nonfree)
+        print("Package", pkg_name)
+        print("Version", licheck.version)
+        print("License", licheck.license)
+        print("Transient Requirements (dependencies of dependencies)")
+        pprint(licheck.transient_dependencies)
+        self.licheck = licheck
 
-    def load_plugins(self):
-        for plug_name, plug in find_question_solver_plugins().items():
-            if plug_name in self.config:
-                try:
-                    self.loaded_modules[plug_name] = plug()
-                    LOG.info(f"loaded question solver plugin: {plug_name}")
-                except Exception as e:
-                    LOG.exception(f"Failed to load question solver plugin: {plug_name}")
+    def test_license_compliance(self):
+        print("Package Versions")
+        pprint(self.licheck.versions)
 
-    @property
-    def modules(self):
-        return sorted(self.loaded_modules.values(),
-                      key=lambda k: k.priority, reverse=True)
+        print("Dependency Licenses")
+        pprint(self.licheck.licenses)
 
-    def shutdown(self):
-        for module in self.modules:
-            try:
-                module.shutdown()
-            except:
-                pass
-
-    def spoken_answers(self, utterance, context=None):
-        for module in self.modules:
-            try:
-                ans = module.spoken_answers(utterance, context)
-                if ans:
-                    return ans
-            except:
-                pass
+        self.licheck.validate()

@@ -26,46 +26,29 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE,  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from neon_solvers.solver import AbstractSolver
+import fileinput
+from os.path import join, dirname
 
-from ovos_plugin_manager.solvers import find_question_solver_plugins, load_question_solver_plugin
-from ovos_utils.log import LOG
+with open(join(dirname(__file__), "version.py"), "r", encoding="utf-8") as v:
+    for line in v.readlines():
+        if line.startswith("__version__"):
+            if '"' in line:
+                version = line.split('"')[1]
+            else:
+                version = line.split("'")[1]
 
+if "a" not in version:
+    parts = version.split('.')
+    parts[-1] = str(int(parts[-1]) + 1)
+    version = '.'.join(parts)
+    version = f"{version}a0"
+else:
+    post = version.split("a")[1]
+    new_post = int(post) + 1
+    version = version.replace(f"a{post}", f"a{new_post}")
 
-class NeonSolversService:
-    def __init__(self, bus, config=None):
-        self.config_core = config or {}
-        self.loaded_modules = {}
-        self.bus = bus
-        self.config = self.config_core.get("solvers") or {}
-        self.load_plugins()
-
-    def load_plugins(self):
-        for plug_name, plug in find_question_solver_plugins().items():
-            if plug_name in self.config:
-                try:
-                    self.loaded_modules[plug_name] = plug()
-                    LOG.info(f"loaded question solver plugin: {plug_name}")
-                except Exception as e:
-                    LOG.exception(f"Failed to load question solver plugin: {plug_name}")
-
-    @property
-    def modules(self):
-        return sorted(self.loaded_modules.values(),
-                      key=lambda k: k.priority, reverse=True)
-
-    def shutdown(self):
-        for module in self.modules:
-            try:
-                module.shutdown()
-            except:
-                pass
-
-    def spoken_answers(self, utterance, context=None):
-        for module in self.modules:
-            try:
-                ans = module.spoken_answers(utterance, context)
-                if ans:
-                    return ans
-            except:
-                pass
+for line in fileinput.input(join(dirname(__file__), "version.py"), inplace=True):
+    if line.startswith("__version__"):
+        print(f"__version__ = \"{version}\"")
+    else:
+        print(line.rstrip('\n'))
