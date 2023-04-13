@@ -1,4 +1,5 @@
 quebra_frases
 json_database
+# TODO - opm min version
 ovos_plugin_manager
 neon-lang-plugin-libretranslate

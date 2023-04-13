@@ -26,33 +26,38 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE,  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from neon_solvers.solver import AbstractSolver
 
+from ovos_plugin_manager.templates.solvers import AbstractSolver
 from ovos_plugin_manager.solvers import find_question_solver_plugins, load_question_solver_plugin
 from ovos_utils.log import LOG
+from ovos_config import Configuration
+from ovos_utils.messagebus import FakeBus
 
 
 class NeonSolversService:
-    def __init__(self, bus, config=None):
-        self.config_core = config or {}
+    def __init__(self, bus=None, config=None):
+        self.config_core = config or Configuration()
         self.loaded_modules = {}
-        self.bus = bus
+        self.bus = bus or FakeBus()
         self.config = self.config_core.get("solvers") or {}
         self.load_plugins()
 
     def load_plugins(self):
         for plug_name, plug in find_question_solver_plugins().items():
-            if plug_name in self.config:
-                try:
-                    self.loaded_modules[plug_name] = plug()
-                    LOG.info(f"loaded question solver plugin: {plug_name}")
-                except Exception as e:
-                    LOG.exception(f"Failed to load question solver plugin: {plug_name}")
+            config = self.config.get(plug_name) or {}
+            if not config.get("enabled", True):
+                LOG.debug(f"{plug_name} not enabled in config, it won't be loaded")
+                continue
+            try:
+                self.loaded_modules[plug_name] = plug(config=config)
+                LOG.info(f"loaded question solver plugin: {plug_name}")
+            except Exception as e:
+                LOG.exception(f"Failed to load question solver plugin: {plug_name}")
 
     @property
     def modules(self):
         return sorted(self.loaded_modules.values(),
-                      key=lambda k: k.priority, reverse=True)
+                      key=lambda k: k.priority)
 
     def shutdown(self):
         for module in self.modules:
@@ -61,11 +66,12 @@ class NeonSolversService:
             except:
                 pass
 
-    def spoken_answers(self, utterance, context=None):
+    def spoken_answer(self, utterance, context=None):
         for module in self.modules:
             try:
-                ans = module.spoken_answers(utterance, context)
+                ans = module.spoken_answer(utterance, context)
                 if ans:
                     return ans
-            except:
+            except Exception as e:
+                LOG.error(e)
                 pass
